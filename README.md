@@ -126,10 +126,13 @@ LIMIT 8;
 ## Used in production
 
 Extracted from **[kattakath/nix-config](https://github.com/kattakath/nix-config)**,
-where it backs a `postgres` MCP server — see
-[`modules/shared/postgres-pgvector.nix`](https://github.com/kattakath/nix-config/blob/main/modules/shared/postgres-pgvector.nix)
-(and [`modules/shared/ollama.nix`](https://github.com/kattakath/nix-config/blob/main/modules/shared/ollama.nix))
-for the pre-extraction, MCP-coupled version, and
+where it backs a `postgres` MCP server. `nix-config` now consumes this flake
+directly (`modules/shared/home.nix` imports `local-rag.homeManagerModules.default`)
+rather than vendoring the module — see
+[`modules/shared/postgres-pgvector.nix`](https://github.com/kattakath/nix-config/blob/739f8c202526aca7632f12363d07b24f29e58300/modules/shared/postgres-pgvector.nix)
+(and [`modules/shared/ollama.nix`](https://github.com/kattakath/nix-config/blob/739f8c202526aca7632f12363d07b24f29e58300/modules/shared/ollama.nix))
+pinned to the last commit before extraction for the pre-extraction,
+MCP-coupled version, and
 [`skills/rag/SKILL.md`](https://github.com/kattakath/nix-config/blob/main/skills/rag/SKILL.md)
 for how an AI coding agent is taught to use the resulting `embed()`/`docs`
 interface.
