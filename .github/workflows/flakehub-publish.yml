@@ -30,6 +30,6 @@ jobs:
             experimental-features = nix-command flakes
       - uses: DeterminateSystems/flakehub-push@v6
         with:
-          name: ismailkattakath/nix-local-rag
+          name: kattakath/nix-local-rag
           visibility: public
           rolling: true
