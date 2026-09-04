@@ -1,6 +1,6 @@
 # nix-local-rag
 
-[![CI](https://github.com/ismailkattakath/nix-local-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ismailkattakath/nix-local-rag/actions/workflows/ci.yml)
+[![CI](https://github.com/kattakath/nix-local-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/kattakath/nix-local-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Built with Nix](https://img.shields.io/badge/built%20with-Nix-5277C3.svg?logo=nixos&logoColor=white)](https://nixos.org)
 
@@ -32,7 +32,7 @@ No API key, no vector-DB client library, nothing leaves the machine.
 
 ```nix
 {
-  inputs.local-rag.url = "github:ismailkattakath/nix-local-rag";
+  inputs.local-rag.url = "github:kattakath/nix-local-rag";
 
   # in your home-manager modules:
   #   local-rag.homeManagerModules.default
