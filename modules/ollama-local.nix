@@ -49,8 +49,8 @@ in
       default = "nomic-embed-text";
       description = ''
         Ollama model pulled (once, in the background) and used for embeddings.
-        Must match `services.pgvectorLocal.embedDim`'s dimension for whatever
-        model you choose — `nomic-embed-text` is 768-dim.
+        Must match `services.ollamaLocal.embedDim` below for whatever model
+        you choose — `nomic-embed-text` is 768-dim.
       '';
     };
 

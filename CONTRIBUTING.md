@@ -7,7 +7,7 @@ the most welcome.
 
 ```sh
 nix flake check -L                       # module eval check (home-manager config)
-nix run nixpkgs#nixfmt-rfc-style -- .    # format all .nix (CI enforces this)
+nix fmt                                  # format all .nix (CI enforces this)
 nix flake show
 ```
 

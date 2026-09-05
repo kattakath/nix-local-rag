@@ -104,9 +104,9 @@ LIMIT 8;
 
 ## Security model
 
-- **Loopback-only binds.** Both agents bind their configured `host` — default
-  `127.0.0.1` — with nothing listening off-box unless you explicitly widen it
-  (on you if you do).
+- **Loopback-only binds.** Postgres is hard-bound to `127.0.0.1` — there is no
+  `host` option to widen it. Ollama binds its configured `host`, default
+  `127.0.0.1`; widening that one is on you.
 - **Role/db lockdown.** Postgres's superuser (the macOS login user, created by
   `initdb`) is reachable only over the local Unix socket via `peer` auth. Over
   TCP, only the dedicated `role` may connect, only to `db`, via `trust` (no
