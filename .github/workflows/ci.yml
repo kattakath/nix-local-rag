@@ -23,8 +23,10 @@ jobs:
         with:
           name: kattakath
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Formatting
-        run: nix run nixpkgs#nixfmt-rfc-style -- --check $(find . -name '*.nix')
+      # No separate formatting step: `nix flake check` below runs `checks.treefmt`
+      # from THIS repo's lock. A `nix run nixpkgs#...` step would resolve the
+      # formatter from the RUNNER's registry instead, unpinned and free to drift
+      # from what `nix fmt` uses locally.
       - name: Flake outputs well-formed
         run: nix flake show
       - name: Module eval check

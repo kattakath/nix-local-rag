@@ -6,8 +6,8 @@ the most welcome.
 ## Dev loop
 
 ```sh
-nix flake check -L                       # module eval check (home-manager config)
-nix fmt                                  # format all .nix (CI enforces this)
+nix flake check -L                       # module eval + treefmt check
+nix fmt                                  # treefmt: nixfmt + deadnix + statix
 nix flake show
 ```
 
