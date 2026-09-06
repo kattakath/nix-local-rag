@@ -6,6 +6,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   nixConfig = {
@@ -23,6 +25,8 @@
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ inputs.treefmt-nix.flakeModule ];
+
       systems = [
         "aarch64-darwin"
         "x86_64-linux"
@@ -47,7 +51,20 @@
       perSystem =
         { pkgs, system, ... }:
         {
-          formatter = pkgs.nixfmt-rfc-style;
+          # treefmt owns `nix fmt` AND contributes `checks.treefmt`, so formatting
+          # is gated by THIS flake's own lock rather than by whatever the CI
+          # runner's registry resolves `nixpkgs#nixfmt-rfc-style` to. A bare
+          # `formatter = pkgs.nixfmt-rfc-style` is also a trap: `nix fmt` hands it
+          # every file in the tree, README.md and LICENSE included, which it
+          # cannot parse.
+          # upstream option treefmt-nix.flakeModule exists -> using it
+          # (pinned treefmt-nix flake.nix:19; programs/{nixfmt,deadnix,statix}.nix)
+          treefmt = {
+            projectRootFile = "flake.nix";
+            programs.nixfmt.enable = true;
+            programs.deadnix.enable = true;
+            programs.statix.enable = true;
+          };
 
           # Eval check: a throwaway home-manager configuration with both services
           # enabled, asserting the options single-source correctly and the launchd
