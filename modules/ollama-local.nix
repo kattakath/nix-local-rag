@@ -25,7 +25,7 @@
 # option exists -> the pull agent below is custom, because upstream models the
 # SERVER only and never fetches a model.
 #
-# macOS-ONLY: gated on stdenv.isDarwin, so enabling it on a Linux host is a
+# macOS-ONLY: gated on stdenv.hostPlatform.isDarwin, so enabling it on a Linux host is a
 # clean no-op (safe for mixed nix-darwin + NixOS fleets, and for `nix flake
 # check` on Linux runners).
 {
@@ -68,7 +68,7 @@ in
     };
   };
 
-  config = lib.mkIf (cfg.enable && pkgs.stdenv.isDarwin) (
+  config = lib.mkIf (cfg.enable && pkgs.stdenv.hostPlatform.isDarwin) (
     let
       pullScript = pkgs.writeShellApplication {
         name = "ollama-local-pull";

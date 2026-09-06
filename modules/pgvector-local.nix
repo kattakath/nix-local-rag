@@ -98,7 +98,7 @@ in
     };
   };
 
-  config = lib.mkIf (cfg.enable && pkgs.stdenv.isDarwin) (
+  config = lib.mkIf (cfg.enable && pkgs.stdenv.hostPlatform.isDarwin) (
     let
       # postgresql WITH pgvector (`CREATE EXTENSION vector`) AND pgsql-http
       # (`CREATE EXTENSION http`) — the latter lets the in-DB embed() function
