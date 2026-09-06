@@ -36,12 +36,18 @@
 }:
 let
   cfg = config.services.pgvectorLocal;
-  ollama = config.services.ollamaLocal;
+  # Ollama's COORDINATES come from home-manager's own `services.ollama`
+  # (upstream option home-manager.services.ollama.host/.port exists -> using it;
+  # pinned home-manager modules/services/ollama.nix:28-44). The embed MODEL and
+  # its dimension are this flake's addition on top, in `services.ollamaLocal`.
+  ollama = config.services.ollama;
+  embed = config.services.ollamaLocal;
 in
 {
   imports = [
-    # Single-sources ollama.host/port/embedModel/embedDim into the bootstrap
-    # SQL below — always present even if a consumer only imports this module.
+    # Single-sources embedModel/embedDim into the bootstrap SQL below — always
+    # present even if a consumer only imports this module. (host/port need no
+    # import: `services.ollama` is one of home-manager's own base modules.)
     ./ollama-local.nix
   ];
 
@@ -128,7 +134,7 @@ in
           SELECT (
             (ext.http_post(
               'http://${ollama.host}:${toString ollama.port}/api/embeddings',
-              pg_catalog.json_build_object('model', '${ollama.embedModel}', 'prompt', input)::text,
+              pg_catalog.json_build_object('model', '${embed.embedModel}', 'prompt', input)::text,
               'application/json'
             )).content::jsonb -> 'embedding'
           )::text::public.vector;
@@ -138,7 +144,7 @@ in
           id        bigserial PRIMARY KEY,
           content   text NOT NULL,
           metadata  jsonb NOT NULL DEFAULT '{}',
-          embedding public.vector(${toString ollama.embedDim})
+          embedding public.vector(${toString embed.embedDim})
         );
         CREATE INDEX IF NOT EXISTS docs_embedding_hnsw
           ON public.docs USING hnsw (embedding public.vector_cosine_ops);

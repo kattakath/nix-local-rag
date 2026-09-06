@@ -5,8 +5,9 @@
 [![Built with Nix](https://img.shields.io/badge/built%20with-Nix-5277C3.svg?logo=nixos&logoColor=white)](https://nixos.org)
 
 A local-first RAG (retrieval-augmented generation) stack for macOS, declared as
-two home-manager `launchd` user agents: a loopback-only **Postgres + pgvector +
-pgsql-http**, and a loopback-only **Ollama**. Bootstrap SQL wires them together
+home-manager `launchd` user agents: a loopback-only **Postgres + pgvector +
+pgsql-http**, a loopback-only **Ollama** (home-manager's own `services.ollama`),
+and a one-shot agent that pulls the embed model. Bootstrap SQL wires them together
 with an in-DB `public.embed(text)` `SECURITY DEFINER` function that calls
 Ollama over loopback HTTP, plus a `public.docs` table (content + jsonb
 metadata + a vector column) and an HNSW cosine index — so ingest and retrieval
@@ -49,11 +50,16 @@ Both default to loopback-only, no auth needed:
 {
   services.ollamaLocal = {
     enable = true;
-    # host = "127.0.0.1";       # default
-    # port = 11434;             # default
     # embedModel = "nomic-embed-text";  # default, 768-dim
     # embedDim = 768;           # must match embedModel's output dimension
   };
+
+  # The Ollama SERVER is home-manager's own `services.ollama`, which
+  # `ollamaLocal` enables for you. Its coordinates live there, not here:
+  # services.ollama = {
+  #   host = "127.0.0.1";       # default
+  #   port = 11434;             # default
+  # };
 
   services.pgvectorLocal = {
     enable = true;
@@ -65,9 +71,10 @@ Both default to loopback-only, no auth needed:
 }
 ```
 
-`pgvectorLocal` single-sources `ollamaLocal`'s `host`/`port`/`embedModel`/
-`embedDim` options into its bootstrap SQL (the embed function's URL and the
-`vector(...)` column width), so it's enough to change them in one place. The
+`pgvectorLocal` single-sources Ollama's coordinates into its bootstrap SQL (the
+embed function's URL and the `vector(...)` column width), so it's enough to
+change them in one place: `services.ollama`'s `host`/`port` for the URL,
+`ollamaLocal`'s `embedModel`/`embedDim` for the model and column width. The
 `pgvectorLocal` module imports `ollamaLocal` itself, so it evaluates standalone
 even if you only reference the postgres module directly — but you need
 `ollamaLocal.enable = true` too for `embed()` to actually have something to
@@ -75,7 +82,7 @@ call at runtime.
 
 ## Usage
 
-Once both agents are running (`launchctl list | grep -E 'ollama-local|postgres-pgvector'`),
+Once the agents are running (`launchctl list | grep -E 'ollama|postgres-pgvector'`),
 connect with any Postgres client — `psql`, a script, or your own MCP
 `postgres` server — using `config.services.pgvectorLocal.databaseUri`
 (read-only, computed from `role`/`port`/`db`; no secret in it, trust auth on

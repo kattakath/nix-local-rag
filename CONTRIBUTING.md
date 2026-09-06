@@ -19,9 +19,12 @@ nix flake show
   the whole point of this stack is that loopback + role/db lockdown needs
   none. If a change would introduce a real secret, it belongs in a different
   flake (e.g. `sops-nix`/`agenix`/a Keychain-backed one).
-- `services.pgvectorLocal` must keep single-sourcing
-  `services.ollamaLocal`'s `host`/`port`/`embedModel`/`embedDim` — don't
-  hardcode a second copy of Ollama's coordinates.
+- `services.pgvectorLocal` must keep single-sourcing Ollama's coordinates —
+  `services.ollama`'s `host`/`port` and `services.ollamaLocal`'s
+  `embedModel`/`embedDim`. Don't hardcode a second copy.
+- Don't re-model what home-manager already owns. The Ollama server is
+  `services.ollama` upstream; `services.ollamaLocal` only adds the embed-model
+  pull on top. Grep the pinned input's option surface before adding custom Nix.
 - Don't couple this flake to any specific consumer (MCP server, script,
   etc.) — it exposes `databaseUri` and stops there. Wiring belongs to the
   consumer's own config.

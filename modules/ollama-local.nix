@@ -1,17 +1,29 @@
 # home-manager module: services.ollamaLocal
 #
-# Local Ollama, as a loopback-only launchd user agent (darwin) — the embedding
-# runtime for the local RAG stack. Nothing in a pgvector store can GENERATE
-# embeddings on its own, so Ollama runs an embed model locally (private, free,
-# no API key) and `services.pgvectorLocal` (modules/pgvector-local.nix) calls
-# it over loopback HTTP from an in-DB `embed()` function — the whole RAG loop
-# stays plain SQL, no separate embedding server for a client to talk to.
+# The EMBEDDING half of the local RAG stack. Ollama itself is NOT hand-rolled
+# here: home-manager already ships `services.ollama`, whose darwin path emits a
+# `launchd.agents.ollama` running `ollama serve` with `OLLAMA_HOST` bound from
+# its own `host`/`port`, `KeepAlive`, `ProcessType = "Background"`, and
+# `home.packages`. This module turns that on and adds the one thing upstream
+# has no opinion about — making sure an EMBED model is actually present, since
+# nothing in a pgvector store can generate embeddings on its own and
+# `services.pgvectorLocal` (modules/pgvector-local.nix) calls Ollama over
+# loopback HTTP from an in-DB `embed()` function.
 #
-# The run-wrapper execs `ollama serve` in the foreground for launchd to
-# supervise, and pulls the embed model once in the background after the server
-# is up (skipped on later launches once present). Bound to `host`/`port`
-# (127.0.0.1 by default) — nothing listens off-box unless you explicitly widen
-# `host`, which is on you.
+#   upstream option home-manager.services.ollama exists -> using it
+#   (pinned home-manager modules/services/ollama.nix:108-126 — launchd.agents.ollama
+#   with EnvironmentVariables/KeepAlive/ProcessType, plus home.packages; options
+#   host/port at :28-44; auto-imported by modules/modules.nix:95, which readDir's
+#   ./services)
+#
+# So bind address and port are `services.ollama.host` / `.port` — set them
+# there, not here. They stay loopback (127.0.0.1) by upstream default; widening
+# them is on you, Ollama has no auth. Extra server env goes through upstream's
+# `services.ollama.environmentVariables` (:71-85), not a wrapper script.
+#
+# grepped home-manager/modules/services/ollama.nix for pull/model/embed — no
+# option exists -> the pull agent below is custom, because upstream models the
+# SERVER only and never fetches a model.
 #
 # macOS-ONLY: gated on stdenv.isDarwin, so enabling it on a Linux host is a
 # clean no-op (safe for mixed nix-darwin + NixOS fleets, and for `nix flake
@@ -24,33 +36,23 @@
 }:
 let
   cfg = config.services.ollamaLocal;
+  ollama = config.services.ollama;
+  logDir = "${config.home.homeDirectory}/Library/Logs";
 in
 {
   options.services.ollamaLocal = {
-    enable = lib.mkEnableOption "local Ollama embedding runtime as a launchd user agent (darwin)";
-
-    host = lib.mkOption {
-      type = lib.types.str;
-      default = "127.0.0.1";
-      description = ''
-        Address Ollama binds to. Keep loopback (127.0.0.1) unless you have a
-        specific reason to expose it further — Ollama itself has no auth.
-      '';
-    };
-
-    port = lib.mkOption {
-      type = lib.types.port;
-      default = 11434;
-      description = "TCP port Ollama listens on.";
-    };
+    enable = lib.mkEnableOption ''
+      the local RAG embedding runtime: home-manager's `services.ollama` plus a
+      one-shot agent that pulls `embedModel` (darwin)
+    '';
 
     embedModel = lib.mkOption {
       type = lib.types.str;
       default = "nomic-embed-text";
       description = ''
-        Ollama model pulled (once, in the background) and used for embeddings.
-        Must match `services.ollamaLocal.embedDim` below for whatever model
-        you choose — `nomic-embed-text` is 768-dim.
+        Ollama model pulled (once, by the one-shot agent) and used for
+        embeddings. Must match `services.ollamaLocal.embedDim` below for
+        whatever model you choose — `nomic-embed-text` is 768-dim.
       '';
     };
 
@@ -68,40 +70,60 @@ in
 
   config = lib.mkIf (cfg.enable && pkgs.stdenv.isDarwin) (
     let
-      runScript = pkgs.writeShellApplication {
-        name = "ollama-local-run";
-        runtimeInputs = [ pkgs.ollama ];
+      pullScript = pkgs.writeShellApplication {
+        name = "ollama-local-pull";
+        runtimeInputs = [ ollama.package ];
         text = ''
-          export OLLAMA_HOST=${cfg.host}:${toString cfg.port}
-          export OLLAMA_MODELS="$HOME/.ollama/models"
+          export OLLAMA_HOST=${ollama.host}:${toString ollama.port}
 
-          # Pull the embed model once, in the background, after the server accepts
-          # calls. Idempotent: skipped on later launches once the model is present.
-          (
-            for _ in $(seq 1 120); do
-              if ollama list >/dev/null 2>&1; then break; fi
-              sleep 1
-            done
-            if ! ollama list 2>/dev/null | grep -q ${lib.escapeShellArg cfg.embedModel}; then
-              ollama pull ${lib.escapeShellArg cfg.embedModel} || true
-            fi
-          ) &
+          # launchd has no ordering between agents, so poll instead of assuming
+          # `ollama serve` won the race. Falling out of the loop is fine: the
+          # pull below then fails loudly rather than pretending it worked.
+          for _ in $(seq 1 120); do
+            if ollama list >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
 
-          exec ollama serve
+          # Bash substring match, NOT `ollama list | grep -q`: under
+          # `writeShellApplication`'s `pipefail`, grep -q exiting early can
+          # SIGPIPE `ollama list` (141), which reads as "model absent" and
+          # re-pulls on every login. Idempotent as written.
+          models=$(ollama list 2>/dev/null || true)
+          want=${lib.escapeShellArg cfg.embedModel}
+          if [[ $models != *"$want"* ]]; then
+            ollama pull "$want"
+          fi
         '';
       };
     in
     {
-      home.packages = [ pkgs.ollama ];
+      services.ollama.enable = true;
 
-      launchd.agents.ollama-local = {
+      # Upstream sets no StandardOutPath, so the server's log would vanish into
+      # launchd's sink. Merge the historical path back onto upstream's own
+      # agent rather than forking it — `launchd.agents.<name>.config` is a
+      # submodule that declares the key.
+      # grepped home-manager/modules/services/ollama.nix for Standard*Path — no
+      # option exists -> custom, because losing `ollama serve`'s log is an
+      # operator-visible regression.
+      # (pinned home-manager modules/launchd/default.nix:36 — `config` is
+      # `submodule (import ./launchd.nix)`; StandardOutPath at launchd.nix:437)
+      launchd.agents.ollama.config = {
+        StandardOutPath = "${logDir}/ollama-local.log";
+        StandardErrorPath = "${logDir}/ollama-local.log";
+      };
+
+      # One-shot: RunAtLoad, no KeepAlive. A failed pull exits non-zero and
+      # stays visible in `launchctl print` and the log below — when this ran
+      # inside the old server wrapper it had to be swallowed with `|| true`, or
+      # a missing model would have taken `ollama serve` down with it.
+      launchd.agents.ollama-local-pull = {
         enable = true;
         config = {
-          ProgramArguments = [ (lib.getExe runScript) ];
+          ProgramArguments = [ (lib.getExe pullScript) ];
           RunAtLoad = true;
-          KeepAlive = true;
-          StandardOutPath = "${config.home.homeDirectory}/Library/Logs/ollama-local.log";
-          StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/ollama-local.log";
+          StandardOutPath = "${logDir}/ollama-local-pull.log";
+          StandardErrorPath = "${logDir}/ollama-local-pull.log";
         };
       };
     }
