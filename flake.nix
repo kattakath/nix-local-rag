@@ -31,9 +31,10 @@
 
       flake = {
         # The reusable home-manager modules (system-agnostic; no-op off macOS).
-        # `pgvectorLocal` imports `ollamaLocal` itself so it's usable standalone —
-        # the postgres module single-sources the ollama host/port/model/dim options
-        # from it either way.
+        # `ollamaLocal` turns on home-manager's own `services.ollama` and adds the
+        # embed-model pull; `pgvectorLocal` imports it so it's usable standalone —
+        # the postgres module single-sources the model/dim from `ollamaLocal` and
+        # the host/port straight from `services.ollama` either way.
         homeManagerModules.ollamaLocal = ./modules/ollama-local.nix;
         homeManagerModules.pgvectorLocal = ./modules/pgvector-local.nix;
         homeManagerModules.default = {
@@ -73,12 +74,17 @@
             in
             {
               module-evaluates = pkgs.runCommand "local-rag-eval" { } ''
-                test "${services.ollamaLocal.host}" = "127.0.0.1"
-                test "${toString services.ollamaLocal.port}" = "11434"
+                test "${pkgs.lib.boolToString services.ollama.enable}" = "true"
+                test "${services.ollama.host}" = "127.0.0.1"
+                test "${toString services.ollama.port}" = "11434"
                 test "${services.ollamaLocal.embedModel}" = "nomic-embed-text"
                 test "${toString services.ollamaLocal.embedDim}" = "768"
                 test "${services.pgvectorLocal.databaseUri}" = "postgresql://mcp@127.0.0.1:5433/ragdb"
-                test "${pkgs.lib.boolToString launchd.agents.ollama-local.enable}" = "true"
+                test "${pkgs.lib.boolToString launchd.agents.ollama.enable}" = "true"
+                # Proves the log override merges onto UPSTREAM's agent rather than
+                # forking it — upstream declares no StandardOutPath of its own.
+                test "${launchd.agents.ollama.config.StandardOutPath}" = "/Users/tester/Library/Logs/ollama-local.log"
+                test "${pkgs.lib.boolToString launchd.agents.ollama-local-pull.enable}" = "true"
                 test "${pkgs.lib.boolToString launchd.agents.postgres-pgvector.enable}" = "true"
                 echo ok > "$out"
               '';
